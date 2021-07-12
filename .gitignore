@@ -1,0 +1,4 @@
+*.o
+httpd
+test_http
+core
