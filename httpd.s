@@ -144,7 +144,7 @@ recv:
     mov r9, 0                   ; src_addr struct size
     syscall
 
-    mov r14, rax ; Save the received message size
+    mov r15, rax ; Save the received message size
 
     call respond
     ret
@@ -156,7 +156,7 @@ respond:
     mov rax, SYS_SENDTO
     mov rdi, r13                ; Socket FD to send to
     lea rsi, [recv_buffer]      ; buffer for msg
-    mov rdx, r14                ; Message size
+    mov rdx, r15                ; Message size
     mov r10, 0                  ; flags
     mov r8, 0                   ; src_addr struct
     mov r9, 0                   ; src_addr struct size
