@@ -32,7 +32,7 @@ itoa:
     mov byte [rsp], 48 ; If the sum is 0 we need to push a 0 char
 .itoa_loop:
     cmp rax, 0
-    je .write_result
+    je .write_loop
     xor rdx, rdx
     div rcx ; Divide by ten, remainder gets put into RDX
     add rdx, 48
@@ -42,8 +42,6 @@ itoa:
     mov [rsp], dl
     jmp .itoa_loop
 
-.write_result:
-    xor rax, rax ; I don't think this is needed - rax should already be 0, but just being careful
 .write_loop:
     ; Check if we've hit the null byte
     cmp byte [rsp], 0
