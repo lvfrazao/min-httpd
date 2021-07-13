@@ -14,6 +14,10 @@ void test_itoa_4(void);
 void test_itoa_5(void);
 void test_itoa_6(void);
 void test_itoa_7(void);
+void test_itoa_8(void);
+void test_itoa_9(void);
+void test_itoa_10(void);
+void test_itoa_11(void);
 
 // Unit testing framework
 #define FAIL() printf(" failure in %s() line %d\n", __func__, __LINE__)
@@ -46,6 +50,10 @@ int main(int argc, char* argv[])
     test_itoa_5();
     test_itoa_6();
     test_itoa_7();
+    test_itoa_8();
+    test_itoa_9();
+    test_itoa_10();
+    test_itoa_11();
 
     printf("Test results: %d / %d\n", total_tests - tests_failed, total_tests);
     return 0;
@@ -123,4 +131,44 @@ void test_itoa_7(void)
     uint64_t str_buf_size = sizeof(str_buf) / sizeof(str_buf[0]);
     itoa(num, str_buf, str_buf_size);
     assert_test(!strcmp("0", str_buf));
+}
+
+void test_itoa_8(void)
+{
+    // Test return value
+    uint64_t num = 0;
+    char str_buf[] = {65,65}; // len 2
+    uint64_t str_buf_size = sizeof(str_buf) / sizeof(str_buf[0]);
+    uint64_t result = itoa(num, str_buf, str_buf_size);
+    assert_test(result == 1);
+}
+
+void test_itoa_9(void)
+{
+    // Test return value
+    uint64_t num = 11;
+    char str_buf[] = {65,65,65}; // len 3
+    uint64_t str_buf_size = sizeof(str_buf) / sizeof(str_buf[0]);
+    uint64_t result = itoa(num, str_buf, str_buf_size);
+    assert_test(result == 2);
+}
+
+void test_itoa_10(void)
+{
+    // Test return value
+    uint64_t num = 123456789123456789;
+    char str_buf[] = {65,65,65,65,65,65,65,65,65,65,65,65,65,65,65,65,65,65,65}; // len 19
+    uint64_t str_buf_size = sizeof(str_buf) / sizeof(str_buf[0]);
+    uint64_t result = itoa(num, str_buf, str_buf_size);
+    assert_test(result == 18);
+}
+
+void test_itoa_11(void)
+{
+    // Test return value
+    uint64_t num = 1626156690;
+    char str_buf[] = {65,65,65,65,65,65,65,65,65,65,65,65,65,65,65,65,65,65,65}; // len 19
+    uint64_t str_buf_size = sizeof(str_buf) / sizeof(str_buf[0]);
+    uint64_t result = itoa(num, str_buf, str_buf_size);
+    assert_test(result == 10);
 }
