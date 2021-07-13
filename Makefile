@@ -24,7 +24,7 @@ main.o: main.s
 
 .PHONY: clean
 clean:
-	rm $(TARGET).o $(TARGET)
+	rm *.o $(TARGET)
 
 .PHONY: test
 test: $(TARGET).o itoa.o logging.o test_http.c
