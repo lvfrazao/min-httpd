@@ -1,5 +1,6 @@
 AS = nasm
-ASFLAGS = -felf64 -w+all -g -F Dwarf
+ASFLAGS = -felf64 -w+all -D LOG_IPS
+DEBUGASFLAGS = -felf64 -w+all -g -F Dwarf -D DEBUG -D LOG_IPS
 CFLAGS = -Wall -g -F Dwarf
 TARGET = httpd
 
@@ -25,6 +26,14 @@ main.o: main.s
 .PHONY: clean
 clean:
 	rm *.o $(TARGET)
+
+.PHONY: debug
+debug: $(TARGET).s main.s itoa.s logging.s
+	$(AS) $(DEBUGASFLAGS) -o $(TARGET).o $(TARGET).s
+	$(AS) $(DEBUGASFLAGS) -o itoa.o itoa.s
+	$(AS) $(DEBUGASFLAGS) -o logging.o logging.s
+	$(AS) $(DEBUGASFLAGS) -o main.o main.s
+	ld -o $(TARGET) $(TARGET).o main.o itoa.o logging.o
 
 .PHONY: test
 test: $(TARGET).o itoa.o logging.o test_http.c

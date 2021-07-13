@@ -3,9 +3,9 @@ default rel
 global itoa
 
 ; uint64_t itoa(uint64_t number, char *str_buffer, uint64_t str_buffer_len)
-; number passed in rdi
-; str_buffer passed in rsi
-; str_buffer_len passed in rdx
+; rdi: number
+; rsi: str_buffer
+; rdx: str_buffer_len
 ; Return number of bytes written to buffer in rax
 ; Clobbers rcx, rdx, rax, r8
 itoa:
