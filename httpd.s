@@ -1,6 +1,6 @@
 bits 64
 default rel
-global _start
+global httpd
 
 ; syscalls
 SYS_CLOSE: equ 3
@@ -24,7 +24,7 @@ section .data
 align 8
 sockaddr:
     sin_family dw AF_INET
-    sin_port dw 5000h ; 80 in little endian, gets stored as LE (which makes it 80 in BE)
+    sin_port dw 5000h ; Gets stored as little endian (which makes it 80 in BE)
     sin_addr dd 0
     sin_zero dq 0
 addr_len: dd 16
@@ -33,7 +33,6 @@ section .bss
 recv_buffer: resb RECV_BUFFER_SIZE ; Max request is 1024 bytes
 
 section .text
-_start:
 httpd:
     push rbp
     mov rbp, rsp
@@ -98,9 +97,11 @@ httpd:
     ; Save the client FD in r13
     mov r13, rax
 
-    ; fork then call recv on the child, unconditional jump to accept on parent
+    ; fork the proc for each request
+    ; Child: call recv and respond
+    ; Parent: close FD + unconditional jump to accept
 .fork:
-    ; fork();
+    ; rax = fork();
     mov rax, SYS_FORK
     syscall
 
@@ -133,6 +134,9 @@ httpd:
     mov rax, SYS_EXIT
     syscall
 
+; recv
+; Receives the message from the client and copies it into recv_buffer
+; Reads from the socket FD stored in r13
 ; Clobbers: rcv, r11, rax, rdi, rsi, rdx, r10, r8, r9
 recv:
     ; recvfrom(4, "hello\n", 1024, 0, NULL, NULL) = 6
@@ -147,6 +151,14 @@ recv:
 
     mov r15, rax ; Save the received message size
     
+    ret
+
+; path_from_request
+; Given an HTTP request stored in recv_buffer, path_from_request parses the
+; request and returns the path to the file being requested.
+; This path is stored as a null terminated string in recv_buffer. The string
+; len is returned in rax.
+path_from_request:
     ret
 
 ; Clobbers: rcv, r11, rax, rdi, rsi, rdx, r10, r8, r9
