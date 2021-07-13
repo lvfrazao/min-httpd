@@ -63,7 +63,7 @@ httpd:
     ; bind(3, {sa_family=AF_INET, sin_port=htons(80), sin_addr=inet_addr("0.0.0.0")}, 16) = 0
     mov rax, SYS_BIND
     mov rdi, r12
-    mov rsi, sockaddr ; our struct sockaddr __user *
+    lea rsi, [sockaddr] ; our struct sockaddr __user *
     mov rdx, 16
     syscall
     ; TODO: Error check bind syscall
@@ -87,7 +87,7 @@ httpd:
     mov rdi, r12
     lea rcx, [sockaddr]
     mov rsi, rcx ; our struct sockaddr * for the client
-    mov rdx, addr_len ; Data structure len
+    lea rdx, [addr_len] ; Data structure len
     syscall
     ; TODO: Error check accept syscall
     ; Log failure instead of crashing
@@ -112,6 +112,7 @@ httpd:
     jnz .close_conn ; Parent process must close the client FD, and loop back
 
     call recv ; child proc must receive the msg and respond to it
+    call respond
 
 .close_conn:
     ; Close the client fd
@@ -145,8 +146,7 @@ recv:
     syscall
 
     mov r15, rax ; Save the received message size
-
-    call respond
+    
     ret
 
 ; Clobbers: rcv, r11, rax, rdi, rsi, rdx, r10, r8, r9
