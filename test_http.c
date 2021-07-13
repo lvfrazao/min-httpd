@@ -1,5 +1,19 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
+#include <string.h>
+
+// Function prototype for the asm itoa
+uint64_t itoa(uint64_t number, char *str_buffer, uint64_t str_buffer_len);
+
+// Tests
+void test_itoa_1(void);
+void test_itoa_2(void);
+void test_itoa_3(void);
+void test_itoa_4(void);
+void test_itoa_5(void);
+void test_itoa_6(void);
+void test_itoa_7(void);
 
 // Unit testing framework
 #define FAIL() printf(" failure in %s() line %d\n", __func__, __LINE__)
@@ -24,6 +38,89 @@ int main(int argc, char* argv[])
     // FILE* devnull = fopen("/dev/null", "w");
     // dup2(fileno(devnull), STDERR_FILENO);
 
+    // Test asm implementation of itoa
+    test_itoa_1();
+    test_itoa_2();
+    test_itoa_3();
+    test_itoa_4();
+    test_itoa_5();
+    test_itoa_6();
+    test_itoa_7();
+
     printf("Test results: %d / %d\n", total_tests - tests_failed, total_tests);
     return 0;
+}
+
+void test_itoa_1(void)
+{
+    // Test base case:
+    // We have a number
+    // We have a buffer bigger than the str repr of the number
+    uint64_t num = 15615612358;
+    char str_buf[] = {65,65,65,65,65,65,65,65,65,65,65,65,65,65,65}; // len 15
+    uint64_t str_buf_size = sizeof(str_buf) / sizeof(str_buf[0]);
+    itoa(num, str_buf, str_buf_size);
+    assert_test(!strcmp("15615612358", str_buf));
+}
+
+void test_itoa_2(void)
+{
+    // Test base case:
+    // We have a number
+    // We have a buffer bigger than the str repr of the number
+    uint64_t num = 15615612358;
+    char str_buf[] = {65,65,65,65,65,65,65,65,65,65,65,65,65,65,65}; // len 15
+    uint64_t str_buf_size = sizeof(str_buf) / sizeof(str_buf[0]);
+    itoa(num, str_buf, str_buf_size);
+    assert_test(strcmp("AAAAAAAAAAAAAAA", str_buf));
+}
+
+void test_itoa_3(void)
+{
+    // Test single digit number with large buffer
+    uint64_t num = 1;
+    char str_buf[] = {65,65,65,65,65,65,65,65,65,65,65,65,65,65,65}; // len 15
+    uint64_t str_buf_size = sizeof(str_buf) / sizeof(str_buf[0]);
+    itoa(num, str_buf, str_buf_size);
+    assert_test(!strcmp("1", str_buf));
+}
+
+void test_itoa_4(void)
+{
+    // Test single digit number with exactly sized buffer
+    uint64_t num = 1;
+    char str_buf[] = {65,65}; // len 2
+    uint64_t str_buf_size = sizeof(str_buf) / sizeof(str_buf[0]);
+    itoa(num, str_buf, str_buf_size);
+    assert_test(!strcmp("1", str_buf));
+}
+
+void test_itoa_5(void)
+{
+    // Test single digit number with buffer that is too small
+    uint64_t num = 1;
+    char str_buf[] = {65}; // len 1
+    uint64_t str_buf_size = sizeof(str_buf) / sizeof(str_buf[0]);
+    uint64_t result = itoa(num, str_buf, str_buf_size);
+    assert_test(!result);
+}
+
+void test_itoa_6(void)
+{
+    // Test single digit number with buffer that is too small
+    uint64_t num = 1;
+    char str_buf[] = {}; // len 0
+    uint64_t str_buf_size = 0;
+    uint64_t result = itoa(num, str_buf, str_buf_size);
+    assert_test(!result);
+}
+
+void test_itoa_7(void)
+{
+    // Test edge case: 0
+    uint64_t num = 0;
+    char str_buf[] = {65,65}; // len 2
+    uint64_t str_buf_size = sizeof(str_buf) / sizeof(str_buf[0]);
+    itoa(num, str_buf, str_buf_size);
+    assert_test(!strcmp("0", str_buf));
 }
