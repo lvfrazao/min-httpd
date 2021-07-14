@@ -29,7 +29,7 @@ log_level_critical_len: equ $-log_level_critical
 NL: db 10
 NL_SIZE: equ 1
 
-section .data
+; section .data
 
 section .bss
 LOG_MSG_MAX_SIZE: equ 1024 ; arbitrary limit on log msg size
@@ -105,7 +105,7 @@ get_epoch_time:
     mov rax, qword [rdi]
     ret
 
-%macro log_msg 2
+%macro log_msg_level 2
     ; %1 log_level
     ; %2 log_level_len
     push r12
@@ -158,17 +158,17 @@ get_epoch_time:
 %endmacro
 
 log_debug:
-    log_msg log_level_debug, log_level_debug_len
+    log_msg_level log_level_debug, log_level_debug_len
 
 log_info:
-    log_msg log_level_info, log_level_info_len
+    log_msg_level log_level_info, log_level_info_len
 
 log_warn:
-    log_msg log_level_warn, log_level_warn_len
+    log_msg_level log_level_warn, log_level_warn_len
 
 log_error:
-    log_msg log_level_error, log_level_error_len
+    log_msg_level log_level_error, log_level_error_len
 
 log_critical:
-    log_msg log_level_critical, log_level_critical_len
+    log_msg_level log_level_critical, log_level_critical_len
 
