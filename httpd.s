@@ -1,9 +1,11 @@
 bits 64
 default rel
 global httpd
-extern log_debug, log_info, log_warn, log_error, log_critical, itoa
+extern log_debug, log_info, log_warn, log_error, log_critical, itoa, write_to_buf
 
 ; syscalls
+SYS_READ: equ 0
+SYS_OPEN: equ 2
 SYS_CLOSE: equ 3
 SYS_SOCKET: equ 41
 SYS_ACCEPT: equ 43
@@ -28,6 +30,26 @@ log_msg_bind_len: equ $-log_msg_bind
 log_msg_listen: db "Server listening on bound port"
 log_msg_listen_len: equ $-log_msg_listen
 
+method_get: db "GET "
+
+; "Special" files
+file_not_found: db "404.html",0
+file_not_found_len: equ $-file_not_found
+file_method_not_allowed: db "405.html",0
+file_method_not_allowed_len: equ $-file_method_not_allowed
+file_internal_server_error: db "500.html",0
+file_internal_server_error_len: equ $-file_internal_server_error
+
+; Status lines
+status_ok: db "HTTP/1.0 200",13,10
+status_ok_len: equ $-status_ok
+status_not_found: db "HTTP/1.0 404",13,10
+status_not_found_len: equ $-status_not_found
+status_method_not_allowed: db "HTTP/1.0 405",13,10
+status_method_not_allowed_len: equ $-status_method_not_allowed
+status_internal_server_error: db "HTTP/1.0 500",13,10
+status_internal_server_error_len: equ $-status_internal_server_error
+
 section .data
 ; struct sockaddr __user
 struc sockaddr
@@ -50,8 +72,17 @@ log_msg_accept: db "Client connected: ?.?.?.?:?            " ; Enough space left
 log_msg_accept_len: equ $-log_msg_accept
 log_msg_accept_ip_idx: equ 18 ; Where to start writting the IP and port
 
+; Root of all files to be served
+server_root: db "./index"
+server_root_len: equ $-server_root
+server_root_file: db "index.html"
+server_root_file_len: equ $-server_root_file
+
 section .bss
 recv_buffer: resb RECV_BUFFER_SIZE ; Max request is 1024 bytes
+filename: resb RECV_BUFFER_SIZE ; Name of file to serve
+http_status: resq 1 ; Pointer to status msg to be used
+http_status_len: resq 1 ; Scalar value
 
 section .text
 httpd:
@@ -59,7 +90,9 @@ httpd:
     mov rbp, rsp
     ; A simple HTTP server
     ; IPv4 only
-    ; Takes a single argument: port to listen on
+    ; Takes two arguments
+    ; 1) Port to listen on
+    ; 2) Base directory to read from
     ; Serves from the current working directory
     ; Only accepts GET requests
 
@@ -223,6 +256,10 @@ httpd:
     jnz .close_conn ; Parent process must close the client FD, and loop back
 
     call recv ; child proc must receive the msg and respond to it
+    call path_from_request
+
+    lea rdi, [filename] ; File to respond with
+    mov rsi, rax        ; Filename len
     call respond
 
 .close_conn:
@@ -269,10 +306,106 @@ recv:
 ; This path is stored as a null terminated string in recv_buffer. The string
 ; len is returned in rax.
 path_from_request:
+    ; Check method, if not get return 405
+    ; if (method != "GET") {
+    ;     status = 405;
+    ;     file = "405.html";
+    ; }
+    lea rax, [recv_buffer]
+    mov eax, dword [rax]
+    lea rcx, [method_get]
+    cmp eax, dword [rcx]
+    jne .method_not_allowed
+
+    add rax, 4 ; Skip "GET "
+    xor rcx, rcx
+.loop:
+    ; Check if finished
+    cmp byte [rax + rcx], " "
+    je .done ; Finish parsing at first space, yes, I know, this isnt kosher, filenames can have spaces.
+    ; Check for bounds
+    cmp rcx, RECV_BUFFER_SIZE - 4
+    je .done
+
+    inc rcx
+    jmp .loop
+.done:
+    push rcx    ; Str size
+    push rax    ; Str pointer
+    ; use write_to_buf to fill in filename
+    lea rdi, [filename]                 ; destination buffer
+    xor rsi, rsi                        ; index to start copying at
+    mov rdx, RECV_BUFFER_SIZE           ; dest buffer size
+    lea rcx, [server_root]              ; src buffer
+    mov r8, server_root_len             ; src buffer size
+    call write_to_buf
+
+    ; rsi is set from the previous write_to_buf call
+    ; Can keep rdi set from previous call
+    mov rdx, RECV_BUFFER_SIZE           ; dest buffer size
+    pop rcx ; Filename pointer
+    pop r8 ; Filename size
+    call write_to_buf
+
+    mov rax, r8 ; Return the filename len
+    add rax, server_root_len
+
+    mov byte [rdi + rsi], 0             ; Null terminate the string
+    inc rax
+
+    ; Set status
+    lea rdi, [status_ok]
+    lea rsi, [http_status]
+    mov [rsi], rdi
+    lea rsi, [http_status_len]
+    mov rsi, status_ok_len
+
+    ret
+.method_not_allowed:
+    ; use write_to_buf to fill in filename
+    lea rdi, [filename]                 ; destination buffer
+    xor rsi, rsi                        ; index to start copying at
+    mov rdx, RECV_BUFFER_SIZE           ; dest buffer size
+    lea rcx, [server_root]              ; src buffer
+    mov r8, server_root_len             ; src buffer size
+    call write_to_buf
+    mov rax, r8 ; Return the filename len
+
+    ; Add forward slash in between the server root and the filename
+    mov byte [rdi + rsi], "/"
+    inc rsi
+    inc rax
+
+    ; rsi is set from the previous write_to_buf call
+    ; Can keep rdi set from previous call
+    mov rdx, RECV_BUFFER_SIZE           ; dest buffer size
+    lea rcx, [file_method_not_allowed]
+    mov r8, file_method_not_allowed_len
+    push rax
+    call write_to_buf
+    mov byte [rdi + rsi], 0             ; Null terminate the string
+    pop rax
+    add rax, r8
+
+
+    ; Set status
+    lea rdi, [status_method_not_allowed]
+    lea rsi, [http_status]
+    mov [rsi], rdi
+    lea rsi, [http_status_len]
+    mov rsi, status_method_not_allowed_len
+
     ret
 
-; Clobbers: rcv, r11, rax, rdi, rsi, rdx, r10, r8, r9
+; uint64_t respond(char *filename, uint64_t filename_len)
+; rdi: filename
+; rsi: filename_len
+; Clobbers: rcx, r11
 respond:
+    ; Open the file and read it into the reponse buffer
+    mov rax, SYS_OPEN
+
+
     ; Do response
     ; sendto(4, "hello\n", 6, 0, NULL, 0)     = 6
     mov rax, SYS_SENDTO
