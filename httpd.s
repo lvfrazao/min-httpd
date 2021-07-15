@@ -21,6 +21,8 @@ SOCK_STREAM: equ 1
 ; other constants
 LISTEN_BACKLOG: equ 128
 RECV_BUFFER_SIZE: equ 1024
+O_RDONLY: equ 0     ; File reading flag
+CREATE_MODE: equ 0  ; File open mode param
 
 section .rodata
 log_msg_socket: db "Created TCP socket"
@@ -49,6 +51,7 @@ status_method_not_allowed: db "HTTP/1.0 405",13,10
 status_method_not_allowed_len: equ $-status_method_not_allowed
 status_internal_server_error: db "HTTP/1.0 500",13,10
 status_internal_server_error_len: equ $-status_internal_server_error
+double_crlf: db 13,10,13,10
 
 section .data
 ; struct sockaddr __user
@@ -259,7 +262,9 @@ httpd:
     call path_from_request
 
     lea rdi, [filename] ; File to respond with
-    mov rsi, rax        ; Filename len
+    call load_file_to_buf
+
+    mov rdi, rax
     call respond
 
 .close_conn:
@@ -317,6 +322,7 @@ path_from_request:
     cmp eax, dword [rcx]
     jne .method_not_allowed
 
+    lea rax, [recv_buffer]
     add rax, 4 ; Skip "GET "
     xor rcx, rcx
 .loop:
@@ -358,7 +364,7 @@ path_from_request:
     lea rsi, [http_status]
     mov [rsi], rdi
     lea rsi, [http_status_len]
-    mov rsi, status_ok_len
+    mov qword [rsi], status_ok_len
 
     ret
 .method_not_allowed:
@@ -393,25 +399,83 @@ path_from_request:
     lea rsi, [http_status]
     mov [rsi], rdi
     lea rsi, [http_status_len]
-    mov rsi, status_method_not_allowed_len
+    mov qword [rsi], status_method_not_allowed_len
 
     ret
 
-; uint64_t respond(char *filename, uint64_t filename_len)
+; uint64_t load_file_to_buf(char *filename)
 ; rdi: filename
-; rsi: filename_len
+; Returns number of bytes read in rax
 ; Clobbers: rcx, r11
-respond:
+load_file_to_buf:
     ; Open the file and read it into the reponse buffer
     mov rax, SYS_OPEN
+    ; rdi already contains the filename
+    mov rsi, O_RDONLY
+    mov rdx, CREATE_MODE
+    syscall
 
+    ; FD in rax now
+    cmp rax, 0
+    jge .copy_to_resp_buf ; Positive numbers means success
+.error:
+    ; Not found response
+    ; TODO: Cache the whole file in memory
+    mov rax, SYS_OPEN
+    lea rdi, [file_not_found]
+    mov rsi, O_RDONLY
+    mov rdx, CREATE_MODE
+    syscall
 
+    lea rdi, [status_not_found]
+    lea rsi, [http_status]
+    mov [rsi], rdi
+    lea rsi, [http_status_len]
+    mov qword [rsi], status_not_found_len
+
+.copy_to_resp_buf:
+    push rax ; Save the FD for a second
+
+    lea rdi, [recv_buffer]
+    xor rsi, rsi
+    mov rdx, RECV_BUFFER_SIZE
+    lea rcx, [http_status]
+    mov rcx, [rcx] ; pointer to http_status
+    lea r8, [http_status_len] ; src buf
+    mov r8, qword [r8] ; src buf size
+    call write_to_buf
+
+    ; Our status code is now in our response buffer
+
+    lea rsi, [recv_buffer + rax] ; Response buffer, starting after the status code
+    mov rdx, RECV_BUFFER_SIZE ; Max size
+    sub rdx, rax ; Adjust for the status line len
+    mov rax, SYS_READ
+    pop rdi ; Pop the FD into rdi
+    syscall
+
+    ; As always, finish our response with two CRLF
+    add rsi, rax ; Add the read bytes
+    lea rdi, [double_crlf]
+    mov edi, dword [rdi]
+    mov dword [rsi], edi
+    add rsi, 4
+
+    ; Calculate total len of msg
+    lea rax, [recv_buffer]
+    sub rsi, rax
+    mov rax, rsi
+
+    ret
+
+; uint64_t respond(uint64_t msg_len)
+respond:
     ; Do response
     ; sendto(4, "hello\n", 6, 0, NULL, 0)     = 6
     mov rax, SYS_SENDTO
-    mov rdi, r13                ; Socket FD to send to
     lea rsi, [recv_buffer]      ; buffer for msg
-    mov rdx, r15                ; Message size
+    mov rdx, rdi                ; Message size
+    mov rdi, r13                ; Socket FD to send to
     mov r10, 0                  ; flags
     mov r8, 0                   ; src_addr struct
     mov r9, 0                   ; src_addr struct size

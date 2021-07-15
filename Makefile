@@ -11,6 +11,7 @@ stripped: $(TARGET)
 
 $(TARGET): $(TARGET).o main.o itoa.o logging.o
 	ld -o $(TARGET) $(TARGET).o main.o itoa.o logging.o
+	sudo setcap 'cap_net_bind_service=+ep' $(TARGET)
 
 $(TARGET).o: $(TARGET).s
 	$(AS) $(ASFLAGS) -o $(TARGET).o $(TARGET).s
@@ -34,7 +35,8 @@ debug: $(TARGET).s main.s itoa.s logging.s
 	$(AS) $(DEBUGASFLAGS) -o itoa.o itoa.s
 	$(AS) $(DEBUGASFLAGS) -o logging.o logging.s
 	$(AS) $(DEBUGASFLAGS) -o main.o main.s
-	ld q-o $(TARGET) $(TARGET).o main.o itoa.o logging.o
+	ld -o $(TARGET) $(TARGET).o main.o itoa.o logging.o
+	sudo setcap 'cap_net_bind_service=+ep' $(TARGET)
 
 .PHONY: test
 test: $(TARGET).o itoa.o logging.o test_http.c

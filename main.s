@@ -5,4 +5,4 @@ extern httpd
 
 section .text
 _start:
-    call httpd
+    jmp httpd
