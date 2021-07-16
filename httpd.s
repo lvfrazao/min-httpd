@@ -35,11 +35,11 @@ log_msg_listen_len: equ $-log_msg_listen
 method_get: db "GET "
 
 ; "Special" files
-file_not_found: db "404.html",0
+file_not_found: db "/404.html",0
 file_not_found_len: equ $-file_not_found
-file_method_not_allowed: db "405.html",0
+file_method_not_allowed: db "/405.html",0
 file_method_not_allowed_len: equ $-file_method_not_allowed
-file_internal_server_error: db "500.html",0
+file_internal_server_error: db "/500.html",0
 file_internal_server_error_len: equ $-file_internal_server_error
 
 ; Status lines
@@ -52,6 +52,10 @@ status_method_not_allowed_len: equ $-status_method_not_allowed
 status_internal_server_error: db "HTTP/1.0 500",13,10
 status_internal_server_error_len: equ $-status_internal_server_error
 double_crlf: db 13,10,13,10
+
+; Content-type headers
+content_type_html: db "Content-Type: text/html",13,10
+content_type_html_len: equ $-content_type_html
 
 section .data
 ; struct sockaddr __user
@@ -80,12 +84,17 @@ server_root: db "./index"
 server_root_len: equ $-server_root
 server_root_file: db "index.html"
 server_root_file_len: equ $-server_root_file
+root_request: db "/",0
+root_file: db "/index.html"
+root_file_len: equ $-root_file
 
 section .bss
 recv_buffer: resb RECV_BUFFER_SIZE ; Max request is 1024 bytes
 filename: resb RECV_BUFFER_SIZE ; Name of file to serve
 http_status: resq 1 ; Pointer to status msg to be used
 http_status_len: resq 1 ; Scalar value
+content_type: resb RECV_BUFFER_SIZE
+content_type_len: resq 1
 
 section .text
 httpd:
@@ -328,14 +337,23 @@ path_from_request:
 .loop:
     ; Check if finished
     cmp byte [rax + rcx], " "
-    je .done ; Finish parsing at first space, yes, I know, this isnt kosher, filenames can have spaces.
+    je .done_loop ; Finish parsing at first space, yes, I know, this isnt kosher, filenames can have spaces.
     ; Check for bounds
     cmp rcx, RECV_BUFFER_SIZE - 4
-    je .done
+    je .done_loop
 
     inc rcx
     jmp .loop
-.done:
+.done_loop:
+    cmp rcx, 1
+    jne .load_filename
+
+    ; If equal it means that theyre requesting the root "/"
+    ; We must load "index.html"
+    lea rax, [root_file]
+    mov rcx, root_file_len
+
+.load_filename:
     push rcx    ; Str size
     push rax    ; Str pointer
     ; use write_to_buf to fill in filename
@@ -366,6 +384,14 @@ path_from_request:
     lea rsi, [http_status_len]
     mov qword [rsi], status_ok_len
 
+    ; Set content type
+    ; TODO: recognize types other than text/html
+    lea rdi, [content_type_html]
+    lea rsi, [content_type]
+    mov [rsi], rdi
+    lea rsi, [content_type_len]
+    mov qword [rsi], content_type_html_len
+
     ret
 .method_not_allowed:
     ; use write_to_buf to fill in filename
@@ -376,11 +402,6 @@ path_from_request:
     mov r8, server_root_len             ; src buffer size
     call write_to_buf
     mov rax, r8 ; Return the filename len
-
-    ; Add forward slash in between the server root and the filename
-    mov byte [rdi + rsi], "/"
-    inc rsi
-    inc rax
 
     ; rsi is set from the previous write_to_buf call
     ; Can keep rdi set from previous call
@@ -419,19 +440,41 @@ load_file_to_buf:
     cmp rax, 0
     jge .copy_to_resp_buf ; Positive numbers means success
 .error:
-    ; Not found response
-    ; TODO: Cache the whole file in memory
-    mov rax, SYS_OPEN
-    lea rdi, [file_not_found]
-    mov rsi, O_RDONLY
-    mov rdx, CREATE_MODE
-    syscall
+    ; Issue a not found response
 
+    ; use write_to_buf to fill in filename
+    lea rdi, [filename]                 ; destination buffer
+    xor rsi, rsi                        ; index to start copying at
+    mov rdx, RECV_BUFFER_SIZE           ; dest buffer size
+    lea rcx, [server_root]              ; src buffer
+    mov r8, server_root_len             ; src buffer size
+    call write_to_buf
+    mov rax, r8 ; Return the filename len
+
+    ; rsi is set from the previous write_to_buf call
+    ; Can keep rdi set from previous call
+    mov rdx, RECV_BUFFER_SIZE           ; dest buffer size
+    lea rcx, [file_not_found]
+    mov r8, file_not_found_len
+    push rax
+    call write_to_buf
+    mov byte [rdi + rsi], 0             ; Null terminate the string
+    pop rax
+    add rax, r8
+
+    ; TODO: Cache the whole file in memory
+
+    ; Set the status
     lea rdi, [status_not_found]
     lea rsi, [http_status]
-    mov [rsi], rdi
-    lea rsi, [http_status_len]
-    mov qword [rsi], status_not_found_len
+    lea rdx, [http_status_len]
+    mov rcx, status_not_found_len
+    call set_status
+
+    ; Recurse to the load_file_to_buf function
+    ; Dangerous? If index/404.html is missing this could peg a CPU.
+    lea rdi, [filename]
+    jmp load_file_to_buf
 
 .copy_to_resp_buf:
     push rax ; Save the FD for a second
@@ -446,10 +489,23 @@ load_file_to_buf:
     call write_to_buf
 
     ; Our status code is now in our response buffer
+    ; Add our content-type header now
+    lea rcx, [content_type]
+    mov rcx, [rcx] ; pointer to content type
+    lea r8, [content_type_len] ; src buf
+    mov r8, qword [r8] ; src buf size
+    call write_to_buf
 
-    lea rsi, [recv_buffer + rax] ; Response buffer, starting after the status code
+    ; Add an additional cr/lf to the end of the headers section
+    lea rcx, [double_crlf]
+    mov cx, word [rcx]
+    mov word [rdi + rsi], cx
+    add rsi, 2
+
     mov rdx, RECV_BUFFER_SIZE ; Max size
-    sub rdx, rax ; Adjust for the status line len
+    sub rdx, rsi ; Adjust for the status line len
+    ; rsi points to the response buffer, starting after the headers
+    lea rsi, [rdi + rsi]
     mov rax, SYS_READ
     pop rdi ; Pop the FD into rdi
     syscall
@@ -466,6 +522,18 @@ load_file_to_buf:
     sub rsi, rax
     mov rax, rsi
 
+    ret
+
+; set_status(char *status_msg, char **status_ptr, uint64_t *status_len_storage, uint64_t *status_len_ptr, uint64_t status_len)
+; Sets the status double pointer to the status msg we want
+; rdi: Char pointer to status msg we want
+; rsi: Double char pointer to status msg buffer
+; rdx: unint64_t pointer to status msg len
+; rcx: unint64_t status msg len
+add_header:
+set_status:
+    mov [rsi], rdi          ; Put pointer to our status msg in the status double pointer
+    mov qword [rdx], rcx    ; Put the len of our status msg in the msg len ptr
     ret
 
 ; uint64_t respond(uint64_t msg_len)
