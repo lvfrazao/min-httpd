@@ -5,9 +5,10 @@ CC = clang
 CFLAGS = -fPIE -Wall -g -F Dwarf
 TARGET = httpd
 
-.PHONY: stripped
-stripped: $(TARGET)
+.PHONY: release
+release: $(TARGET)
 	strip $(TARGET)
+	sudo setcap 'cap_net_bind_service=+ep' $(TARGET)
 
 $(TARGET): $(TARGET).o main.o itoa.o logging.o
 	ld -o $(TARGET) $(TARGET).o main.o itoa.o logging.o
