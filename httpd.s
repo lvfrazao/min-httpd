@@ -7,6 +7,8 @@ extern log_debug, log_info, log_warn, log_error, log_critical, itoa, write_to_bu
 SYS_READ: equ 0
 SYS_OPEN: equ 2
 SYS_CLOSE: equ 3
+SYS_RT_SIGACTION: equ 13
+SYS_SIGRETURN: equ 13
 SYS_SOCKET: equ 41
 SYS_ACCEPT: equ 43
 SYS_SENDTO: equ 44
@@ -23,6 +25,9 @@ LISTEN_BACKLOG: equ 128
 RECV_BUFFER_SIZE: equ 1024
 O_RDONLY: equ 0     ; File reading flag
 CREATE_MODE: equ 0  ; File open mode param
+SIGCHLD: equ 17
+SIG_IGN: equ 1
+SA_RESTORER: equ 0x04000000
 
 section .rodata
 log_msg_socket: db "Created TCP socket"
@@ -52,6 +57,34 @@ status_method_not_allowed_len: equ $-status_method_not_allowed
 status_internal_server_error: db "HTTP/1.0 500",13,10
 status_internal_server_error_len: equ $-status_internal_server_error
 double_crlf: db 13,10,13,10
+
+; Signal handler
+; struct sigaction {
+;     void     (*sa_handler)(int);
+;     void     (*sa_sigaction)(int, siginfo_t *, void *);
+;     sigset_t   sa_mask;
+;     int        sa_flags;
+;     void     (*sa_restorer)(void);
+; };
+struc sigaction
+    .sa_handler: resq 1 ; Pointer to handler taking an int
+    .sa_sigaction: resd 1 ; Pointer to function taking int, siginfo ptr, void ptr
+    .sa_mask: resd 1 ; not sure on this one how big it should be
+    .sa_flags: resq 1
+    .sa_restorer: resq 1
+endstruc
+; Not totally happy with this as I dont understnad how its working.
+; Inspiration from here:
+; https://www.reddit.com/r/asm/comments/oda13w/stepbystep_on_setting_a_signal_handler_on_linux/
+align 8
+sigaction_instance:
+    istruc sigaction
+        at sigaction.sa_handler, dq SIG_IGN
+        at sigaction.sa_sigaction, dd SA_RESTORER
+        at sigaction.sa_mask, dd 0
+        at sigaction.sa_flags, dq restorer
+        at sigaction.sa_restorer, dq 0
+    iend
 
 ; Content-type headers
 content_type_html: db "Content-Type: text/html",13,10
@@ -163,6 +196,9 @@ httpd:
     lea rdi, [log_msg_listen]
     mov rsi, log_msg_listen_len
     call log_info
+
+    ; Allow kernel to reap children procs after they exit
+    call ignore_sigchld 
 
 ; loop on blocking accept
 .serve_forever:
@@ -293,6 +329,22 @@ httpd:
     mov rdi, 1
 .exit:
     mov rax, SYS_EXIT
+    syscall
+
+; void ignore_sigchld(void)
+; rt_sigaction(SIGCHLD, {sa_handler=SIG_IGN, sa_mask=[CHLD], sa_flags=SA_RESTORER|SA_RESTART, sa_restorer=0x7f20ae638210}, {sa_handler=SIG_DFL, sa_mask=[], sa_flags=0}, 8) = 0
+; Clobbers rax, rdi, rsi, rdx, r10, rcx, r11
+ignore_sigchld:
+    mov rax, SYS_RT_SIGACTION
+    mov rdi, SIGCHLD ; signal number
+    lea rsi, [sigaction_instance] ; sigaction action
+    mov rdx, 0 ; sigaction old action
+    mov r10, 8 ; sigsetsize
+    syscall
+    ret
+
+restorer:
+    mov rax, SYS_SIGRETURN
     syscall
 
 ; recv
