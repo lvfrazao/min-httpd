@@ -73,7 +73,7 @@ struc sigaction
     .sa_flags: resq 1
     .sa_restorer: resq 1
 endstruc
-; Not totally happy with this as I dont understnad how its working.
+; Not totally happy with this as I dont understand how its working.
 ; Inspiration from here:
 ; https://www.reddit.com/r/asm/comments/oda13w/stepbystep_on_setting_a_signal_handler_on_linux/
 align 8
