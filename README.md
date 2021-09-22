@@ -4,7 +4,7 @@ A minimal Linux HTTP server written in x86_64 assembly.
 
 ## "Features"
 
-* Listens on port 80/tcp and responds to requests
+* Listens on port 80/tcp and responds to requests by serving files 
 * Doesn't use libc
 * Super small binary! (8.8K as of Sep 15, 2021)
 * Statically linked
