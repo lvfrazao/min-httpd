@@ -264,7 +264,9 @@ httpd:
     mov r13, rax
 
     ; Log accept failure
+    push rsi
     check_exit_code_warn log_msg_accept_fail, log_msg_accept_fail_len
+    pop rsi
 
 %ifdef LOG_IPS
     ; Log the accepted connection
