@@ -265,6 +265,8 @@ httpd:
 
     ; Log accept failure
     push rsi
+    cmp rax, 0
+    setl al ; If rax is negative its an error
     check_exit_code_warn log_msg_accept_fail, log_msg_accept_fail_len
     pop rsi
 
