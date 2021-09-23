@@ -614,6 +614,17 @@ load_file_to_buf:
     pop rdi ; Pop the FD into rdi
     syscall
 
+    ; Specifying a directory instead of a file will cause `open` to work but
+    ; `read` to fail. In this scenario we will catch it by setting rax to 0 to
+    ; indicate we read 0 bytes. This is mega-hacky and also exposes information
+    ; to the client about our file structure which combined with the path
+    ; traversal vulnerability makes this very dangerous to run without
+    ; precautions.
+    cmp rax, 0
+    jge .no_read_error
+    xor rax, rax
+
+.no_read_error:
     ; As always, finish our response with two CRLF
     add rsi, rax ; Add the read bytes
     lea rdi, [double_crlf]
