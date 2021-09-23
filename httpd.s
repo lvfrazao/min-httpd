@@ -15,11 +15,14 @@ SYS_SENDTO: equ 44
 SYS_RECVFROM: equ 45
 SYS_BIND: equ 49
 SYS_LISTEN: equ 50
+SYS_SETSOCKOPT: equ 54
 SYS_FORK: equ 57
 SYS_EXIT: equ 60
 ; socket constants
 AF_INET: equ 2
 SOCK_STREAM: equ 1
+SOL_SOCKET: equ 1
+SO_REUSEADDR: equ 2
 ; other constants
 LISTEN_BACKLOG: equ 128
 RECV_BUFFER_SIZE: equ 1024
@@ -162,6 +165,10 @@ httpd:
     mov rsi, log_msg_socket_len
     call log_debug
 %endif
+
+.set_SO_REUSEADDR:
+    mov rdi, r12
+    call set_so_reuseaddr_sockopt
 
 ; Bind our socket to "0.0.0.0:80"
 .bind_addr:
@@ -601,3 +608,20 @@ respond:
     mov r9, 0                   ; src_addr struct size
     syscall
     ret
+
+; set_so_reuseaddr_sockopt(uint64 fd)
+; rdi: uint64_t File descriptor of socket to apply option to
+; Set socket option on open socket
+set_so_reuseaddr_sockopt:
+    ; uint64_t setsockopt(uint64_t fd, uint64_t level, uint64_t optname, void *optval, uint64_t optlen)
+    ; e.g.,
+    ; setsockopt(3, SOL_SOCKET, SO_REUSEADDR, [1], 4) = 0
+    mov rax, SYS_SETSOCKOPT ; unint64_t Socket file descriptor number
+    mov rsi, SOL_SOCKET     ; unint64_t Level that the option is manipulated at, always SOL_SOCKET for sockets
+    mov rdx, SO_REUSEADDR   ; unint64_t The option to manipulate as defined in sys/socket.h
+    lea r10, [.one]         ; void* Points to usually int value, should be nonzero to enable a boolean
+    mov r8, 4               ; uint64_t Contains size of buffer pointed to by optval
+    syscall
+    ret
+.one:
+    dd 1
