@@ -28,8 +28,8 @@ LISTEN_BACKLOG: equ 128
 RECV_BUFFER_SIZE: equ 1024
 O_RDONLY: equ 0     ; File reading flag
 CREATE_MODE: equ 0  ; File open mode param
-SIGCHLD: equ 17
 SIG_IGN: equ 1
+SIGCHLD: equ 17
 SA_RESTORER: equ 0x04000000
 
 section .rodata
@@ -37,9 +37,18 @@ log_msg_socket: db "Created TCP socket"
 log_msg_socket_len: equ $-log_msg_socket
 log_msg_bind: db "Bound socket to port"
 log_msg_bind_len: equ $-log_msg_bind
+log_msg_bind_fail: db "Failed to bind to port! Exiting!"
+log_msg_bind_fail_len: equ $-log_msg_bind_fail
+log_msg_setsockopt: db "Set SO_REUSEADDR socket option"
+log_msg_setsockopt_len: equ $-log_msg_setsockopt
 log_msg_listen: db "Server listening on bound port"
 log_msg_listen_len: equ $-log_msg_listen
-
+log_msg_listen_fail: db "Listen syscall failed! Exiting!"
+log_msg_listen_fail_len: equ $-log_msg_listen_fail
+log_msg_accept_fail: db "Accept syscall failed"
+log_msg_accept_fail_len: equ $-log_msg_accept_fail
+log_msg_fork_fail: db "Fork syscall failed! Client will not get a response."
+log_msg_fork_fail_len: equ $-log_msg_fork_fail
 method_get: db "GET "
 
 ; "Special" files
@@ -133,6 +142,35 @@ content_type: resb RECV_BUFFER_SIZE
 content_type_len: resq 1
 
 section .text
+%macro check_exit_code 3
+    ; %1 failure message pointer
+    ; %2 failure message len
+    ; %3 log function to call
+    test rax, rax
+    jz %%success
+    lea rdi, [%1]
+    mov rsi, %2
+    call %3
+%if %3 = log_critical
+    jmp .exit_failure
+%endif
+%%success:
+%endmacro
+
+%macro check_exit_code_warn 2
+    ; %1 failure message
+    ; %2 failure message len
+    check_exit_code %1, %2, log_warn
+%endmacro
+
+%macro check_exit_code_critical 2
+    ; %1 failure message
+    ; %2 failure message len
+    check_exit_code %1, %2, log_critical
+    jne .exit_failure
+%%success:
+%endmacro
+
 httpd:
     push rbp
     mov rbp, rsp
@@ -155,6 +193,9 @@ httpd:
     xor rdx, rdx
     syscall
     ; TODO: Error check socket syscall
+    ; How likely is the socket syscall to fail? And what are the circumstances
+    ; where it can fail? Any failure here will be caught by the fatal inability
+    ; to bind to port 80 anyways.
 
     ; Save our socket FD in r12
     mov r12, rax
@@ -170,6 +211,13 @@ httpd:
     mov rdi, r12
     call set_so_reuseaddr_sockopt
 
+%ifdef DEBUG
+    ; Log socket option set
+    lea rdi, [log_msg_setsockopt]
+    mov rsi, log_msg_setsockopt_len
+    call log_debug
+%endif
+
 ; Bind our socket to "0.0.0.0:80"
 .bind_addr:
     ; bind(3, {sa_family=AF_INET, sin_port=htons(80), sin_addr=inet_addr("0.0.0.0")}, 16) = 0
@@ -178,10 +226,7 @@ httpd:
     lea rsi, [addr] ; our struct sockaddr __user *
     mov rdx, 16
     syscall
-    ; TODO: Error check bind syscall
-    test rax, rax
-    jnz .exit_failure
-
+    check_exit_code_critical log_msg_bind_fail, log_msg_bind_fail_len
 %ifdef DEBUG
     ; Log bind
     lea rdi, [log_msg_bind]
@@ -195,9 +240,7 @@ httpd:
     mov rdi, r12
     mov rsi, LISTEN_BACKLOG
     syscall
-    ; TODO: Error check listen syscall
-    test rax, rax
-    jnz .exit_failure
+    check_exit_code_critical log_msg_listen_fail, log_msg_listen_fail_len
 
     ; Log listen
     lea rdi, [log_msg_listen]
@@ -216,14 +259,12 @@ httpd:
     mov rsi, rcx ; our struct sockaddr * for the client
     lea rdx, [addr_len] ; Data structure len
     syscall
-    ; TODO: Error check accept syscall
-    ; Log failure instead of crashing
-    ; TODO: info level logging on clients connecting
-    cmp rax, 0
-    jl .exit_failure
 
     ; Save the client FD in r13
     mov r13, rax
+
+    ; Log accept failure
+    check_exit_code_warn log_msg_accept_fail, log_msg_accept_fail_len
 
 %ifdef LOG_IPS
     ; Log the accepted connection
@@ -303,11 +344,15 @@ httpd:
     mov rax, SYS_FORK
     syscall
 
-    ; TODO: Error check fork syscall
-    ; Log failure instead of crashing
     cmp rax, 0
     setne r14b ; r14 is nonzero if were in the parent
     jl .exit_failure
+    ; TODO: Error check fork syscall
+    ; Log failure instead of crashing    
+    ; This doesnt work because it clobbers registers we need. I dont want to
+    ; push and pop registers on every request just for logging and error
+    ; checking unless proven neccesary (e.g., server crashes).
+    ; check_exit_code_warn log_msg_fork_fail, log_msg_fork_fail_len
     jnz .close_conn ; Parent process must close the client FD, and loop back
 
     call recv ; child proc must receive the msg and respond to it
