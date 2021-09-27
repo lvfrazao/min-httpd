@@ -337,6 +337,23 @@ serve_forever:
     push rdx
     call itoa
     pop rdx
+
+    ; Fill remainder of buffer with 0 bytes.
+    ; Fixes bug where old data written to buffer remains between logs
+    ; e.g.:
+    ; 1632720523 INFO: Client connected: 108.162.215.25:24702
+    ; 1632720524 INFO: Client connected: 172.69.35.8:5547002
+    ; 1632720525 INFO: Client connected: 172.70.98.15:282462
+    ; while (rdx)
+    ;   *rdx = 0;
+    ;   rdx--;
+.log_buffer_overwrite:
+    test rdx, rdx
+    je .log_done
+    dec rdx
+    mov byte [rsi], 0
+    jmp .log_buffer_overwrite
+.log_done:
 %endif
 
     ; Log accept
