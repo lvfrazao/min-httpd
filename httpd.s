@@ -264,11 +264,15 @@ httpd:
     mov r13, rax
 
     ; Log accept failure
+%ifdef LOG_IPS
     push rsi
+%endif
     cmp rax, 0
     setl al ; If rax is negative its an error
     check_exit_code_warn log_msg_accept_fail, log_msg_accept_fail_len
+%ifdef LOG_IPS
     pop rsi
+%endif
 
 %ifdef LOG_IPS
     ; Log the accepted connection
