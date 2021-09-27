@@ -1,8 +1,8 @@
 bits 64
 default rel
 global _start
-extern httpd
+extern serve_forever
 
 section .text
 _start:
-    jmp httpd
+    jmp serve_forever

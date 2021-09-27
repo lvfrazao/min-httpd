@@ -1,6 +1,6 @@
 bits 64
 default rel
-global httpd
+global serve_forever
 extern log_debug, log_info, log_warn, log_error, log_critical, itoa, write_to_buf
 
 ; syscalls
