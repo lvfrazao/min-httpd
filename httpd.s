@@ -120,7 +120,7 @@ addr:
     iend
 addr_len: dd 16
 
-log_msg_accept: db "Client connected: ?.?.?.?:?            " ; Enough space leftover to log IP and port
+log_msg_accept: db "Client connected: ?.?.?.?:?               " ; Enough space leftover to log IP and port
 log_msg_accept_len: equ $-log_msg_accept
 log_msg_accept_ip_idx: equ 18 ; Where to start writting the IP and port
 
