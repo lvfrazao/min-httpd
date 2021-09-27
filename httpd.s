@@ -171,7 +171,7 @@ section .text
 %%success:
 %endmacro
 
-httpd:
+serve_forever:
     push rbp
     mov rbp, rsp
     ; A simple HTTP server
