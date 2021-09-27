@@ -337,6 +337,8 @@ serve_forever:
     push rdx
     call itoa
     pop rdx
+    add rsi, rax    ; Add to the pointer value the num chars written
+    sub rdx, rax    ; Subtract the num bytes written from remaining
 
     ; Fill remainder of buffer with 0 bytes.
     ; Fixes bug where old data written to buffer remains between logs
@@ -350,8 +352,9 @@ serve_forever:
 .log_buffer_overwrite:
     test rdx, rdx
     je .log_done
+    mov byte [rsi], ' '
     dec rdx
-    mov byte [rsi], 0
+    inc rsi
     jmp .log_buffer_overwrite
 .log_done:
 %endif
