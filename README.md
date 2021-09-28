@@ -1,6 +1,6 @@
 # min-httpd
 
-A minimal Linux HTTP server written in x86_64 assembly.
+A minimal Linux HTTP server written in x86_64 assembly. Currently used to power [my blog](https://frazao.ca) (source: https://github.com/lvfrazao/myblog).
 
 ## "Features"
 
