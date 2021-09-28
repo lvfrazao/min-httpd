@@ -491,6 +491,13 @@ path_from_request:
 .load_filename:
     push rcx    ; Str size
     push rax    ; Str pointer
+
+    ; Log the file being requested
+    ; TODO: Make this nicer
+    mov rdi, rax
+    mov rsi, rcx
+    call log_info
+
     ; use write_to_buf to fill in filename
     lea rdi, [filename]                 ; destination buffer
     xor rsi, rsi                        ; index to start copying at
