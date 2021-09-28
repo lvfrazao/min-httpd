@@ -120,7 +120,7 @@ addr:
     iend
 addr_len: dd 16
 
-log_msg_accept: db "Client connected: ?.?.?.?:?               " ; Enough space leftover to log IP and port
+log_msg_accept: db "Client connected: ?.?.?.?:?                " ; Enough space leftover to log IP and port
 log_msg_accept_len: equ $-log_msg_accept
 log_msg_accept_ip_idx: equ 18 ; Where to start writting the IP and port
 
@@ -346,6 +346,7 @@ serve_forever:
     ; 1632720523 INFO: Client connected: 108.162.215.25:24702
     ; 1632720524 INFO: Client connected: 172.69.35.8:5547002
     ; 1632720525 INFO: Client connected: 172.70.98.15:282462
+    ; (The final digits are the same due to the buffer being previously written to)
     ; while (rdx)
     ;   *rdx = 0;
     ;   rdx--;
