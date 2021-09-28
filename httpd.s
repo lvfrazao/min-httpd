@@ -120,9 +120,10 @@ addr:
     iend
 addr_len: dd 16
 
-log_msg_accept: db "Client connected: ?.?.?.?:?                " ; Enough space leftover to log IP and port
+log_msg_accept: db "Client connected: "
+log_msg_accept_begin_len: equ $-log_msg_accept
+log_msg_ip: db "?.?.?.?:?                " ; Enough space leftover to log IP and port
 log_msg_accept_len: equ $-log_msg_accept
-log_msg_accept_ip_idx: equ 18 ; Where to start writting the IP and port
 
 ; Root of all files to be served
 server_root: db "./index"
@@ -275,13 +276,14 @@ serve_forever:
 %endif
 
 %ifdef LOG_IPS
+    ; TODO: Make this a function in logging.s
+    ; Something like `inet_ntoa`
     ; Log the accepted connection
     ; 1st octet of IP
     mov r9, rsi
     movzx rdi, byte [r9 + sockaddr.sin_addr + 0] ; The number to convert to ascii
-    lea rsi, [log_msg_accept + log_msg_accept_ip_idx]
-    mov rdx, log_msg_accept_len
-    sub rdx, log_msg_accept_ip_idx ; Space left in buffer
+    lea rsi, [log_msg_ip]
+    mov rdx, log_msg_accept_len - log_msg_accept_begin_len; Space left in buffer
 
     push rdx
     call itoa
