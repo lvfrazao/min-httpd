@@ -6,7 +6,8 @@ A minimal Linux HTTP server written in x86_64 assembly. Currently used to power 
 
 * Listens on port 80/tcp and responds to requests by serving files 
 * Doesn't use libc
-* Super small binary! (8.8K as of Sep 15, 2021)
+* Super small binary! (9K stripped as of Sep 29, 2021)
+* Low resource usage! ![resource usage](resource_usage.png)
 * Statically linked
 * Supports "Content-Type: text/html"
 * Supports HTTP status
