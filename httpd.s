@@ -23,6 +23,8 @@ AF_INET: equ 2
 SOCK_STREAM: equ 1
 SOL_SOCKET: equ 1
 SO_REUSEADDR: equ 2
+SO_RCVTIMEO: equ 20
+SO_RCVTIMEO_LEN: equ 16
 ; other constants
 LISTEN_BACKLOG: equ 128
 RECV_BUFFER_SIZE: equ 1024
@@ -97,6 +99,10 @@ sigaction_instance:
         at sigaction.sa_flags, dq restorer
         at sigaction.sa_restorer, dq 0
     iend
+
+TIMEOUT:
+    tv_sec  dq 10
+    tv_nsec dq 0
 
 ; Content-type headers
 content_type_html: db "Content-Type: text/html",13,10
@@ -386,7 +392,14 @@ serve_forever:
     ; check_exit_code_warn log_msg_fork_fail, log_msg_fork_fail_len
     jnz .close_conn ; Parent process must close the client FD, and loop back
 
+    mov rdi, r13
+    call set_so_rcvtimeo_sockopt
     call recv ; child proc must receive the msg and respond to it
+
+    ; Check return of recv
+    cmp rax, 0
+    jl .close_conn
+
     call path_from_request
 
     lea rdi, [filename] ; File to respond with
@@ -719,3 +732,18 @@ set_so_reuseaddr_sockopt:
     ret
 .one:
     dd 1
+
+; set_so_rcvtimeo_sockopt(uint64 fd)
+; rdi: uint64_t File descriptor of socket to apply option to
+; Set socket option on open socket
+set_so_rcvtimeo_sockopt:
+    ; uint64_t setsockopt(uint64_t fd, uint64_t level, uint64_t optname, void *optval, uint64_t optlen)
+    ; e.g.,
+    ; setsockopt(3, SOL_SOCKET, SO_RCVTIMEO_OLD, "\n\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0", 16) = 0
+    mov rax, SYS_SETSOCKOPT ; unint64_t Socket file descriptor number
+    mov rsi, SOL_SOCKET     ; unint64_t Level that the option is manipulated at, always SOL_SOCKET for sockets
+    mov rdx, SO_RCVTIMEO    ; unint64_t The option to manipulate as defined in sys/socket.h
+    lea r10, TIMEOUT        ; void* Points to usually int value, should be nonzero to enable a boolean
+    mov r8, SO_RCVTIMEO_LEN ; uint64_t Contains size of buffer pointed to by optval
+    syscall
+    ret
