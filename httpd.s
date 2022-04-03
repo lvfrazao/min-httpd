@@ -743,7 +743,7 @@ set_so_rcvtimeo_sockopt:
     mov rax, SYS_SETSOCKOPT ; unint64_t Socket file descriptor number
     mov rsi, SOL_SOCKET     ; unint64_t Level that the option is manipulated at, always SOL_SOCKET for sockets
     mov rdx, SO_RCVTIMEO    ; unint64_t The option to manipulate as defined in sys/socket.h
-    lea r10, TIMEOUT        ; void* Points to usually int value, should be nonzero to enable a boolean
+    mov r10, TIMEOUT        ; void* Points to usually int value, should be nonzero to enable a boolean
     mov r8, SO_RCVTIMEO_LEN ; uint64_t Contains size of buffer pointed to by optval
     syscall
     ret
